@@ -3,8 +3,8 @@ import Data.Functor ((<&>))
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Control.Arrow (Arrow(second, first, (***)))
-import Data.Maybe (fromMaybe)
-import Data.List (intersperse)
+import Data.Maybe (fromMaybe, fromJust)
+import Data.List (intersperse, find, nub, findIndex)
 
 data Mov = Le | Ri | Do deriving (Eq,Show,Enum)
 
@@ -14,7 +14,7 @@ compr = map (\x->if x=='<' then Le else Ri) . head
 ddr :: [Mov] -> [Mov]
 ddr = intersperse Do . cycle
 
-newtype Shape = Sh (Set (Int,Int))
+newtype Shape = Sh (Set (Int,Int)) deriving (Show)
 unSh (Sh x) = x
 
 blueprints = [
@@ -37,16 +37,17 @@ poi m = case m of
     Do -> first pred
 
 bounder :: Shape -> Bool
-bounder (Sh x) = not . any oob $ x
+bounder (Sh x) = any oob x
     where oob (y,x) = x<0 || x>6 || y<0
 
 overlap :: Shape -> Shape -> Bool
-overlap (Sh x) (Sh y) = Set.disjoint x y
+overlap (Sh x) (Sh y) = not $ Set.disjoint x y
 
 everest :: Shape -> Int
 everest x =
     let j = Set.lookupMax . Set.map fst . unSh $ x
-    in fromMaybe 0 j
+        jj = succ <$> j
+    in fromMaybe 0 jj
 
 transla :: Shape -> (Int,Int) -> Shape
 transla (Sh x) (i,y) = Sh . Set.map ((+i)***(+y)) $ x
@@ -59,27 +60,56 @@ spawn earth pat =
 
 frame :: (Shape,Shape,Int) -> Mov -> (Shape,Shape,Int)
 frame (earth,rock,nex) m
-    | m==Do && ov = (mars,spawn mars (nex`mod`7),nex+1)
+    | m==Do && okk = (mars,spawn mars (nex`mod`5),nex+1)
     | otherwise = (earth,pebble,nex)
     where
         nu = premover rock m
         ov = overlap earth nu
-        pebble = if ov || bounder nu then rock else nu
+        okk = ov || bounder nu
+        pebble = if okk then rock else nu
         mars = Sh . uncurry Set.union . (unSh***unSh) $ (earth,pebble)
 
-preproc :: b0 -> b1
-preproc = error "X"
+preproc = ddr
 
-kernell :: b0 -> b1
-kernell = error "X"
+trench = Sh Set.empty
 
-solve :: b0 -> c
-solve = error "X"
+kernell :: [Mov] -> [(Shape,Shape,Int)]
+kernell = scanl frame (trench,spawn trench 0,1)
 
-part1 = solve . kernell . preproc . compr
+solve :: Int -> [(Shape,Shape,Int)] -> Int
+solve i = (\(Just (x,_,_))->everest x) . find (\(_,_,x)->x==i)
+
+part1 = solve 164 . kernell . preproc . compr
+
+heightAt :: Int -> [(Shape,Shape,Int)] -> Int
+heightAt i = (\(x,_,_)->everest x) . (!!i)
+
+thought :: [(Shape,Shape,Int)] -> [Int]
+thought = map fst . nub . map (\(x,_,p)->(everest x,p))
+
+delta :: Num a => [a] -> [a]
+delta x = zipWith (-) (tail x) x
+
+rountabout :: [(Shape,Shape,Int)] -> Int -> Int
+rountabout x y = fromJust $ findIndex (\(w,_,_)->everest w==y) x
+
+solve2 bg hk =
+    let lg = length bg
+        lk = length hk
+        sg = sum bg
+        sk = sum hk
+        after = 1000000000000-lg
+        bulk = (after`div`lk) * sk
+        rst = sum . take (after`mod`lk) $ hk
+    in sg+bulk+rst
+
+part2 = kernell . preproc . compr
 
 test1 = wrap "demo" part1
 result1 = wrap "input" part1
+
+test2 = wrap "demo" part2
+result2 = wrap "input" part2
 
 wrap :: String -> ([String]->a) -> IO a
 wrap name f = (openFile name ReadMode >>= hGetContents) <&> (f . lines)
