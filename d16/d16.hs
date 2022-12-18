@@ -14,6 +14,7 @@ import Control.Monad (guard)
 import Data.List (nub)
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
+import Debug.Trace (traceShowId, trace)
 
 glance :: String -> [String]
 glance = tail . words . filter vax
@@ -42,7 +43,9 @@ compr = propa . map glance
 weightIn :: [Int] -> [(Int,Int)]
 weightIn = zip (repeat 1)
 
-newtype Grop = Grop (IntMap (Int,[(Int,Int)])) deriving (Eq,Show)
+type Idk = (Int,[(Int,Int)])
+
+newtype Grop = Grop (IntMap Idk) deriving (Eq,Show)
 unGrop (Grop x) = x
 
 dignify :: [(Int,[Int])] -> Grop
@@ -51,7 +54,7 @@ dignify = Grop . IMap.fromList . zip [0..] . map (second weightIn)
 isRoad :: (Int,[a]) -> Bool
 isRoad (x,ys) = x==0 && length ys == 2
 
-isDeadend :: Grop -> Int -> (Int,[(Int,Int)]) -> Bool
+isDeadend :: Grop -> Int -> Idk -> Bool
 isDeadend (Grop dic) ke r@(x,ys) = isRoad r &&
     let [(_,u),(_,i)] = ys
         mpi = dic IMap.!i
@@ -74,7 +77,7 @@ mergeRoads gx@(Grop x) =
         Grop paved = IMap.foldlWithKey bridge gx xs
     in Grop $ foldl (flip IMap.delete) paved (IMap.keys xs)
 
-bridge :: Grop -> Int -> (Int, [(Int,Int)]) -> Grop
+bridge :: Grop -> Int -> Idk -> Grop
 bridge (Grop x) ke (d,a) =
     let [(n,i),(m,y)] = take 2 a
         nucnt = m+n
@@ -83,10 +86,10 @@ bridge (Grop x) ke (d,a) =
         rem = IMap.delete ke
     in Grop . clenup ke . rem . adj2 . adj1 $ x
 
-clenup :: Int -> IntMap (Int, [(Int, Int)]) -> IntMap (Int, [(Int, Int)])
+clenup :: Int -> IntMap Idk -> IntMap Idk
 clenup ke = IMap.map $ second $ filter $ (/=ke).snd
 
-pave :: Int -> Int -> (Int, [(Int, Int)]) -> (Int, [(Int, Int)])
+pave :: Int -> Int -> Idk -> Idk
 pave nu cnt = second ((cnt,nu):)
 
 preproc :: [(Int,[Int])] -> Grop
@@ -106,8 +109,7 @@ toVal (Grop dc) = fst . (dc IMap.!)
 data MN = MN Int Int deriving (Eq,Show,Ord)
 mn x y = if x<y then MN x y else MN y x
 
-newtype Ruler = Ruler (Map MN Int) deriving (Eq,Show)
-unRuler (Ruler x) = x
+type Ruler = Map MN Int
 
 suffl (a,x) = [(mn a c,b)|(b,c)<-x]
 
@@ -134,34 +136,49 @@ moreEdge4 par = bizzaro $
 everyEdge :: [(MN,Int)] -> [(MN,Int)]
 everyEdge =  hammer moreEdge4. hammer moreEdge3. hammer moreEdge2. hammer moreEdge1
 
-toValhalla :: Grop -> [(Int,[(Int,Int)])]
+toValhalla :: Grop -> [Idk]
 toValhalla gx@(Grop x) =
     let tog = toVal gx
         lit = IMap.elems x
         f = map.second$map.second$tog
     in f lit
 
-toValves :: [(Int,[(Int,Int)])] -> IntSet
+toValves :: [Idk] -> IntSet
 toValves = IntSet.fromList . map fst
 
-toSpace :: [(Int,[(Int,Int)])] -> Ruler
+toSpace :: [Idk] -> Ruler
 toSpace =
-    Ruler . Map.map succ . Map.fromListWith min . everyEdge . concatMap suffl
+    Map.map succ . Map.fromListWith min . everyEdge . concatMap suffl
 
 -- Computations
+
+data Steam = Steam Int Int IntSet deriving (Eq,Show)
+
+ahoy :: Ruler -> Steam -> Int
+ahoy rul (Steam sec loc places)
+    | null branches = boon
+    | otherwise = boon + nextBest
+    where branches = map toGo . IntSet.toList $ canReach
+          nextBest = maximum . map (ahoy rul) $ branches
+          boon = sec*loc
+          canReach = IntSet.filter ((<=sec).cost) places
+          cost x = rul Data.Map.Strict.! mn loc x
+          toGo :: Int -> Steam
+          toGo x = Steam (sec-cost x) x (IntSet.delete x canReach)
 
 kernell :: b0 -> b1
 kernell = error "X"
 
-solve :: b0 -> c
-solve = error "X"
+solve :: [Idk] -> Int
+solve = uncurry ahoy . second (Steam 30 0.IntSet.delete 0) . (toSpace &&& toValves)
 
-part1 = solve . kernell . preproc . compr
+part1 :: [String] -> Int
+part1 = solve . toValhalla . preproc . compr
 
-test1 = wrDemo $ toSpace . toValhalla . preproc . compr
-result1 = wrIn $ toSpace . toValhalla .preproc . compr
+test1 = wrD part1
+result1 = wrIn part1
 
-wrDemo = wrap "demo"
+wrD = wrap "demo"
 wrIn = wrap "input"
 wrap :: String -> ([String]->a) -> IO a
 wrap name f = (openFile name ReadMode >>= hGetContents) <&> (f . lines)

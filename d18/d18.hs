@@ -9,9 +9,6 @@ type C3 = (Int,Int,Int)
 compr :: [String] -> [C3]
 compr = map $ read . ('(':) . (++")")
 
--- Exposed sides = 6*|cubes| - 2*|edges|
--- or - sum(degrees)
-
 potential :: C3 -> [C3]
 potential (x,y,z) =
     [
@@ -22,49 +19,8 @@ potential (x,y,z) =
 everyone :: [C3] -> [C3]
 everyone = concatMap potential
 
-ejgy :: [C3] -> [C3]
-ejgy x = everyone x `intersect` x
-
-exposed :: [C3] -> Int
-exposed x = (6 * ncub) - nedg
-    where ncub = length x
-          nedg = length . ejgy $ x
-
 libr :: [C3] -> [C3]
 libr x = filter (not.(`elem` x)) . everyone $ x
-
--- Cubes who have a cube above and a cube bellow
-sandwich :: [C3] -> [C3]
-sandwich u = filter (traped u) u
-
-sr1 :: [C3] -> C3 -> [C3]
-sr1 u (x,y,z) = filter (\(w,e,r)->y==e&&z==r) u
-
-sr2 :: [C3] -> C3 -> [C3]
-sr2 u (x,y,z) = filter (\(w,e,r)->x==w&&z==r) u
-
-sr3 :: [C3] -> C3 -> [C3]
-sr3 u (x,y,z) = filter (\(w,e,r)->y==e&&x==w) u
-
-traped :: [C3] -> C3 -> Bool
-traped u c@(x,y,z) =
-    let g1 = sr1 u c
-        g2 = sr2 u c
-        g3 = sr3 u c
-        o1 = any (\(n,_,_)->n>x) g1 && any (\(n,_,_)->n<x) g1
-        o2 = any (\(_,n,_)->n>y) g2 && any (\(_,n,_)->n<y) g2
-        o3 = any (\(_,_,n)->n>z) g3 && any (\(_,_,n)->n<z) g3
-    in o1 && o2 && o3
-
-refine :: [C3] -> [C3]
-refine u =
-    let d = sandwich u
-        weird x = elem x u && notElem x d
-        ok = not.any weird.potential
-    in filter ok d
-
-solve2 :: [C3] -> Int
-solve2 x = length x - (length . refine $ x)
 
 -- Common neighbors of two cubes
 commons :: C3 -> C3 -> [C3]
