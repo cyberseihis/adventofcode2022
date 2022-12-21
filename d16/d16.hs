@@ -175,8 +175,50 @@ solve = uncurry ahoy . second (Steam 30 0.IntSet.delete 0) . (toSpace &&& toValv
 part1 :: [String] -> Int
 part1 = solve . toValhalla . preproc . compr
 
+type At = Int
+type Clk = Int
+type Chart = IntSet
+data Eleph = Eleph
+    { clk :: Clk
+    , at :: At
+    , chart :: Chart
+    } deriving (Show, Eq)
+
+ahoy2 :: Ruler -> Chart -> Steam -> Int
+ahoy2 rul remain (Steam sec loc places)
+    | null branches = boon + paralBest
+    | otherwise = boon + theBest
+    where branches = map toGo . IntSet.toList $ canReach
+          theBest = max nextBest paralBest
+          nextBest = maximum . map (uncurry$ahoy2 rul) $ branches
+          paralBest = ahoy rul (Steam 26 0 remain)
+          boon = sec*loc
+          canReach = IntSet.filter ((<=sec).cost) places
+          cost x = rul Data.Map.Strict.! mn loc x
+          toGo :: Int -> (Chart,Steam)
+          toGo x = 
+            let jump = Steam (sec-cost x) x (IntSet.delete x canReach)
+                hop = IntSet.delete x remain
+            in (hop , jump)
+
+solve2 :: [Idk] -> Int
+solve2 x =
+    let spa = toSpace x
+        vlv = toValves x
+        stem = Steam 26 0 crt
+        crt = IntSet.delete 0 vlv
+    in ahoy2 spa crt stem
+
+part2 :: [String] -> Int
+part2 = solve2 . toValhalla . preproc . compr
+
 test1 = wrD part1
 result1 = wrIn part1
+
+test2 = wrD part2
+result2 = wrIn part2
+
+main = print =<< result2
 
 wrD = wrap "demo"
 wrIn = wrap "input"
