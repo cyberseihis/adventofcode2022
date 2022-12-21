@@ -1,103 +1,51 @@
-{-# LANGUAGE RecordWildCards #-}
 import System.IO
 import Data.Functor ((<&>))
 import Santa
-import qualified Data.Sequence as Seq
-import Data.Array.Unboxed (UArray, array, listArray, (!), elems)
-import qualified Data.Array.Unboxed as UArray
-import Data.Sequence (Seq, (><))
-import Data.IntMap.Strict (IntMap, (!))
-import qualified Data.IntMap.Strict as Imap
-import Control.Arrow (Arrow((&&&)))
-import Debug.Trace (traceShowId)
-import Data.Foldable (Foldable(toList))
-import Data.List (elemIndex)
-import Data.Maybe (fromJust)
+import GHC.Base (assert)
+import Control.Arrow (Arrow(first))
 
--- Idea: Array to index order to sequnce location,
--- array to match order with value, so lut
--- sequence of orders that moves with the problem
+compr :: [String] -> [(Int,Int)]
+compr = (`zip` [0..]) . map read
 
-type Lut = UArray Int Int
-type Gps = IntMap Int
-type Ring = Seq Int
-data Now = Now
-    { gps :: Gps
-    , ring :: Ring
-    } deriving (Show, Eq)
+move :: [(Int,Int)] -> Int -> [(Int,Int)]
+move u i =
+    let (bef,pr@(val,_):aft) = break ((==i).snd) u
+        x = val `mod` l
+        ful = aft++bef
+        l = length ful
+        point = if x>=0 then x else l-x
+        (above,bellow) = splitAt point ful
+    in concat [above,[pr],bellow]
 
--- Get values in selection order
-compr :: [String] -> Lut
-compr x =
-    let n = length x in
-    listArray (0,n-1) . map read $ x
+kernell :: [(Int,Int)] -> [(Int,Int)]
+kernell x =
+    let iz = [0..length x - 1]
+    in foldl move x iz
 
--- Starting locations of each
-start :: Int -> Gps
-start n = Imap.fromList $ zip [0..n-1] [0..n-1]
+solve :: [(Int,Int)] -> Int
+solve x =
+    let u = cycle . map fst $ x
+        gu = dropWhile (/=0) u
+        y1 = gu!!1000
+        y2 = gu!!2000
+        y3 = gu!!3000
+    in y1+y2+y3
 
-ezSeq :: Int -> Ring
-ezSeq n = Seq.fromList [0..n-1]
+part1 = solve . kernell . compr
 
-moment :: Int -> Now
-moment i = Now {gps=start i, ring=ezSeq i}
+key = 811589153
 
-click :: Lut -> Now -> Int -> Now
-click lut Now {..} n =
-    let x = fx $ lut UArray.! n
-        fx x = if x<0 then (x`mod`l)-1 else x`mod`l
-        i = gps Imap.! n
-        l = succ . snd . UArray.bounds $ lut
-        thumb = teleport ring i ((i+x) `mod` l)
-        belt = Seq.take x . Seq.drop (i+1) $ ring><ring
-        sattelite = foldl (triangulate l) gps belt
-        antena = Imap.adjust ((`mod`l).(+x)) n sattelite
-    in Now {gps=antena, ring=thumb}
+proc2 :: [(Int,Int)] -> [(Int,Int)]
+proc2 = map $ first (*key)
 
-teleport :: Ring -> Int -> Int -> Ring
-teleport ring from to
-    | from < tor = Seq.deleteAt from . Seq.insertAt tor x$ ring
-    | from > tor = Seq.deleteAt (from+1) . Seq.insertAt tor x$ ring
-    | otherwise = ring
-    where x = ring `Seq.index` from
-          tor = to + 1
+ker2 = foldl1 (.) $ replicate 10 kernell
 
-triangulate :: Int -> Gps -> Int -> Gps
-triangulate n gps i = Imap.adjust f i gps
-    where
-    f :: Int -> Int
-    f = (`mod`n) . pred
+part2 = solve . ker2 . proc2 . compr
 
-prett :: Lut -> Now -> [Int]
-prett lut Now {ring} = map (lut UArray.!) . toList $ ring
+test1 = wrD part1
+result1 = wrI part1
 
-part1 s =
-    let l = length s
-        no = moment l
-        lut = compr s
-        clock = click lut
-    in foldl clock no [0..l-1]
+test2 = wrD part2
+result2 = wrI part2
 
-bet s =
-    let l = length s
-        no = moment l
-        lut = compr s
-        clock = click lut
-    in solve lut $ foldl clock no [0..l-1]
-
-solve :: Lut -> Now -> Int
-solve lut Now {..} =
-    let humble = fromJust . elemIndex 0 . elems $ lut
-        found = ((gps Imap.! humble) + 1)  `mod` l
-        l= Imap.size gps
-        targs = map ((`mod`l).(+found)) [1000,2000,3000]
-        launch = map (Seq.index ring) targs
-        vals = map (lut UArray.!) launch
-    in sum vals
-
-glance = wrD compr
-
-test1 = wrD bet
-result1 = wrI bet
-
-main = print =<< result1
+main = print =<< result2
